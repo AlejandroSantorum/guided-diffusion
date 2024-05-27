@@ -165,9 +165,11 @@ def create_model(
 
     return UNetModel(
         image_size=image_size,
-        in_channels=3,
+        # in_channels=3,   # THIS IS THE ORIGINAL IMPLEMENTATION
+        in_channels=1,  # THIS IS THE MODIFIED IMPLEMENTATION
         model_channels=num_channels,
-        out_channels=(3 if not learn_sigma else 6),
+        # out_channels=(3 if not learn_sigma else 6),  # THIS IS THE ORIGINAL IMPLEMENTATION
+        out_channels=(1 if not learn_sigma else 2),  # THIS IS THE MODIFIED IMPLEMENTATION
         num_res_blocks=num_res_blocks,
         attention_resolutions=tuple(attention_ds),
         dropout=dropout,

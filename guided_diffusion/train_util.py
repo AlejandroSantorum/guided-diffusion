@@ -155,7 +155,13 @@ class TrainLoop:
             not self.lr_anneal_steps
             or self.step + self.resume_step < self.lr_anneal_steps
         ):
-            batch, cond = next(self.data)
+            # ORIGINAL IMPLEMENTATION
+            # batch, cond = next(self.data)
+            # It turns out `next` of DataLoader does not work with GPUs
+            # Bahram's solution
+            data_iter = iter(self.data)
+            batch, cond = next(data_iter)
+
             self.run_step(batch, cond)
             if self.step % self.log_interval == 0:
                 logger.dumpkvs()

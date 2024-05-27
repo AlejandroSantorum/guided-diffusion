@@ -7,9 +7,13 @@ import os
 import socket
 
 import blobfile as bf
-from mpi4py import MPI
 import torch as th
 import torch.distributed as dist
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
+    print("Unable to import mpi4py. MPI will not be available.")
 
 # Change this to reflect your cluster layout.
 # The GPU for a given rank is (rank % GPUS_PER_NODE).
@@ -18,28 +22,34 @@ GPUS_PER_NODE = 8
 SETUP_RETRY_COUNT = 3
 
 
-def setup_dist():
+def setup_dist(rank, world_size):
     """
     Setup a distributed process group.
     """
     if dist.is_initialized():
         return
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{MPI.COMM_WORLD.Get_rank() % GPUS_PER_NODE}"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f"{MPI.COMM_WORLD.Get_rank() % GPUS_PER_NODE}"
 
-    comm = MPI.COMM_WORLD
+    # comm = MPI.COMM_WORLD
     backend = "gloo" if not th.cuda.is_available() else "nccl"
 
     if backend == "gloo":
         hostname = "localhost"
     else:
         hostname = socket.gethostbyname(socket.getfqdn())
-    os.environ["MASTER_ADDR"] = comm.bcast(hostname, root=0)
-    os.environ["RANK"] = str(comm.rank)
-    os.environ["WORLD_SIZE"] = str(comm.size)
+    
+    os.environ["MASTER_ADDR"] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
 
-    port = comm.bcast(_find_free_port(), root=0)
-    os.environ["MASTER_PORT"] = str(port)
-    dist.init_process_group(backend=backend, init_method="env://")
+    dist.init_process_group(backend='gloo', rank=rank, world_size=world_size)
+
+    # os.environ["MASTER_ADDR"] = comm.bcast(hostname, root=0)
+    # os.environ["RANK"] = str(comm.rank)
+    # os.environ["WORLD_SIZE"] = str(comm.size)
+
+    # port = comm.bcast(_find_free_port(), root=0)
+    # os.environ["MASTER_PORT"] = str(port)
+    # dist.init_process_group(backend=backend, init_method="env://")
 
 
 def dev():
@@ -78,9 +88,17 @@ def sync_params(params):
     """
     Synchronize a sequence of Tensors across ranks from rank 0.
     """
-    for p in params:
-        with th.no_grad():
-            dist.broadcast(p, 0)
+    # ORIGINAL IMPLEMENTATION
+    # for p in params:
+        #     with th.no_grad():
+        #         dist.broadcast(p, 0)
+
+    # Bahram's implementation
+    for param in params:
+        # Ensure the parameter is not modified in-place
+        p = param.data.clone()
+        dist.broadcast(p, src=0)
+        param.data.copy_(p)
 
 
 def _find_free_port():
